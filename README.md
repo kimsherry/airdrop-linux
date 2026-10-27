@@ -20,7 +20,7 @@ IOS·macOS 기기와 리눅스 사이에서 AirDrop을 주고받기 위한 프�
 | 유닛 테스트 94개 + 종단간 스크립트 | ✅ 전부 통과 |
 | 실제 Wi-Fi 인터페이스에서 mDNS 발견·전송 | ✅ 검증 |
 | `awdl0` 위에서 실제 아이폰과 통신 | ⚠️ 미검증 (테스트한 PC의 내장 Wi-Fi가 active monitor 미지원) |
-| Bluetooth 비콘 (BlueZ LE 광고) | ✅ 구현 — 송신 시 자동. 이 PC는 Bluetooth가 꺼져 있어 실기기 검증만 못 함 |
+| Bluetooth 비콘 (BlueZ LE 광고) | ✅ 구현·등록 검증 (`ActiveInstances` 1→0). 아이폰이 실제로 반응하는지는 미검증 |
 | contacts-only 모드 | ❌ 원리적으로 불가 (아래 [설명](#contacts-only는-왜-안-되나)) |
 
 ## 필요한 것
@@ -143,6 +143,8 @@ PYTHONPATH=. python3 tests/e2e_loopback.py  # 루프백 종단간 (라디오 불
 - Bluetooth 비콘은 BlueZ가 켜져 있고 어댑터가 powered 상태여야 동작합니다
   (`rfkill list`로 확인, `rfkill unblock bluetooth`). 어댑터가 없으면 로그에 이유가 남고
   AirDrop은 그대로 동작합니다 — 이때는 아이폰에서 AirDrop 화면을 열어두면 됩니다.
+- 비콘이 공중에 나가는 것까지는 확인했지만, 그 신호를 받은 아이폰이 AWDL을 켜는지는
+  아이폰 실물과 AWDL 카드가 있어야 확인됩니다.
 - 이 패키지는 mDNS 멀티캐스트 루프백을 끕니다(`IPV6_MULTICAST_LOOP=0`). 그래서
   **같은 PC 안에서는** 수신기와 송신기가 서로를 mDNS로 찾지 못합니다. 실제 기기끼리는
   영향이 없고, 루프백 테스트는 엔진의 `--loopback` 모드를 씁니다.
