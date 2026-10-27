@@ -20,8 +20,8 @@ IOS·macOS 기기와 리눅스 사이에서 AirDrop을 주고받기 위한 프�
 | 유닛 테스트 94개 + 종단간 스크립트 | ✅ 전부 통과 |
 | 실제 Wi-Fi 인터페이스에서 mDNS 발견·전송 | ✅ 검증 |
 | `awdl0` 위에서 실제 아이폰과 통신 | ⚠️ 미검증 (테스트한 PC의 내장 Wi-Fi가 active monitor 미지원) |
-| contacts-only 모드 | ❌ 미구현 (애플 서명 인증서 필요) |
-| Bluetooth 비콘 | ❌ 리눅스 미구현 (아이폰에서 AirDrop 화면을 열어두면 됨) |
+| Bluetooth 비콘 (BlueZ LE 광고) | ✅ 구현 — 송신 시 자동. 이 PC는 Bluetooth가 꺼져 있어 실기기 검증만 못 함 |
+| contacts-only 모드 | ❌ 원리적으로 불가 (아래 [설명](#contacts-only는-왜-안-되나)) |
 
 ## 필요한 것
 
@@ -31,6 +31,8 @@ IOS·macOS 기기와 리눅스 사이에서 AirDrop을 주고받기 위한 프�
    - 불가: Intel CNVi/iwlwifi 계열 — 주입 시 펌웨어 크래시로 알려져 있음
    - 확인: `iw phy` 에 `Device supports active monitor` 가 있어야 합니다
 2. 리눅스, 파이썬 3.10+ (`python3`), `openssl` (자체서명 인증서 생성용)
+   - Bluetooth 비콘을 쓰려면 `python3-dbus`, `python3-gi` (Ubuntu/Mint는 보통 기본 설치)
+   - 둘 중 하나가 없으면 비콘만 꺼지고 AirDrop 자체는 동작합니다
 3. OWL 빌드 (아래)
 
 ## 설치
@@ -98,15 +100,35 @@ OpenDrop은 2018년대 프로토콜 구현이라 최신 아이폰이 광고를 �
 - `airdrop/netif.py`: `iphlpapi`(Win32) 호출을 `os.name` 분기로 두고 리눅스에서는
   `socket.if_nametoindex` 사용. 링크로컬 주소 조회는 원본이 그대로 동작했습니다.
 - `airdrop/identity.py`: 키 보관 위치를 `~/.local/share/airdrop/keys`로.
-- `airdrop/sender.py`: 리눅스에는 Bluetooth 비콘이 없어 건너뜁니다 (`shortcut:` 주석).
+- `airdrop/beacon.py`: 새 파일. 윈도우판은 PowerShell로 BLE 광고를 쏘지만 리눅스에는
+  그 API가 없어서, 같은 payload를 BlueZ `LEAdvertisingManager1`로 광고합니다.
+- `airdrop/sender.py`: 플랫폼에 따라 PowerShell 비콘과 BlueZ 비콘을 고릅니다.
 - `airdrop/receiver.py`: CLI에 수락 프롬프트(`Terminal`) 추가. 원본 CLI는 묻지 않고
   전부 저장했습니다.
+
+## contacts-only는 왜 안 되나
+
+AirDrop의 contacts-only는 "내 연락처에 있는 사람에게만 보이기"이고, 판정은 **아이폰/맥이**
+합니다. 상대 기기는 우리가 보낸 신원 정보가 자기 연락처 해시와 맞을 때만 응답합니다.
+그 신원은 iCloud 로그인 시 Apple이 서명해 발급하는 device certificate + validation record
+(`UUID`, `SHA-256(이메일/전화번호)` 목록, Apple CA 서명)입니다.
+
+- 리눅스 기기에는 Apple이 서명한 신원이 없습니다 → contacts-only 아이폰은 우리에게
+  응답하지 않습니다. 코드로 우회할 수 있는 종류가 아니라 **키가 없는 문제**입니다.
+- 유일한 방법은 Mac에서 `seemoo-lab/airdrop-keychain-extractor`로 그 자격증명을
+  추출하는 것입니다(SIP 해제 + AMFI 우회 필요, Mac 실물 필요). OpenDrop이 이 방식으로
+  contacts-only를 지원합니다.
+- 이 저장소의 `airdrop/`은 아직 **자체서명 인증서만** 씁니다(원본 winawdl도 동일).
+  추출한 자격증명을 쓰려면 상호 인증 레코드 교환/검증을 추가해야 합니다.
+
+그래서 지금은 아이폰에서 AirDrop을 **"모든 사람(10분)"** 으로 두고 쓰는 것이 답입니다.
+받는 쪽은 어차피 이 PC가 `y/N`으로 물어봅니다.
 
 ## 검증
 
 ```bash
 cd airdrop
-PYTHONPATH=. python3 tests/test_*.py        # 94개
+PYTHONPATH=. python3 tests/test_*.py        # 98개
 PYTHONPATH=. python3 tests/e2e_loopback.py  # 루프백 종단간 (라디오 불필요)
 ```
 
@@ -118,6 +140,9 @@ PYTHONPATH=. python3 tests/e2e_loopback.py  # 루프백 종단간 (라디오 불
 - OWL이 Wi-Fi 카드를 독점합니다 → AirDrop 사용 중 일반 Wi-Fi 인터넷 불가
   (이더넷/USB 테더링은 영향 없음).
 - OWL 저장소는 2026-10에 archived 되었습니다. 최신 macOS/iOS 호환은 보장되지 않습니다.
+- Bluetooth 비콘은 BlueZ가 켜져 있고 어댑터가 powered 상태여야 동작합니다
+  (`rfkill list`로 확인, `rfkill unblock bluetooth`). 어댑터가 없으면 로그에 이유가 남고
+  AirDrop은 그대로 동작합니다 — 이때는 아이폰에서 AirDrop 화면을 열어두면 됩니다.
 - 이 패키지는 mDNS 멀티캐스트 루프백을 끕니다(`IPV6_MULTICAST_LOOP=0`). 그래서
   **같은 PC 안에서는** 수신기와 송신기가 서로를 mDNS로 찾지 못합니다. 실제 기기끼리는
   영향이 없고, 루프백 테스트는 엔진의 `--loopback` 모드를 씁니다.

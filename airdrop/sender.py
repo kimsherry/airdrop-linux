@@ -17,6 +17,7 @@ import uuid
 from typing import NamedTuple
 
 import cpio
+import beacon
 import identity
 import mdns
 import netif
@@ -97,7 +98,7 @@ class Connection(http.client.HTTPConnection):
             raise
 
 
-class Beacon:
+class PowerShellBeacon:
     """The Bluetooth advertisement that makes Apple devices nearby turn AWDL
     on and announce AirDrop. Windows PowerShell sends it: it reaches the
     Bluetooth API with nothing installed."""
@@ -415,6 +416,11 @@ def parse_args(argv):
     return parser.parse_args(argv)
 
 
+# BlueZ can advertise from an ordinary process on Linux; Windows needs the
+# PowerShell bridge because its Bluetooth API has no command line.
+Beacon = PowerShellBeacon if os.name == 'nt' else beacon.Beacon
+
+
 def run(settings, files, context, scope):
     browser = mdns.Browser(SERVICE_TYPE, scope)
     try:
@@ -450,11 +456,7 @@ def main(argv=None):
                 else f'start OWL first (bin/owl {settings.iface})')
         raise SystemExit(f'interface {settings.iface} is not up: {hint}')
     scope, _ = found
-    if settings.no_beacon or os.name != 'nt':
-        if os.name != 'nt':
-            # shortcut: no Bluetooth wake on Linux, so a receiver shows up only
-            # while its own share sheet is open; add an adapter beacon if needed.
-            logging.info('no Bluetooth beacon on this platform')
+    if settings.no_beacon:
         return 0 if run(settings, files, context, scope) else 1
     with Beacon():
         return 0 if run(settings, files, context, scope) else 1
