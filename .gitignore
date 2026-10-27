@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+
+# 위성 프로젝트와 빌드 산출물은 이 저장소에 넣지 않는다
+owl/
+opendrop/
+venv/
+deps/
+cmake-3.31.6-linux-x86_64/
+pkgs/
+*.tar.gz
+
+# 로컬 전용 래퍼
+bin/opendrop

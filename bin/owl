@@ -1,0 +1,6 @@
+#!/bin/sh
+# Run OWL (AWDL) on this host. Requires root and a Wi-Fi card with ACTIVE
+# monitor mode. Build it first: see README.
+here=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+export LD_LIBRARY_PATH="$here/deps/usr/lib/x86_64-linux-gnu${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+exec sudo -E "$here/owl/build/daemon/owl" -i "${1:-wlo1}"

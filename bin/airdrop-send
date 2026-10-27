@@ -1,0 +1,5 @@
+#!/bin/sh
+# AirDrop sender. Needs awdl0, created by OWL (bin/owl).
+here=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+exec python3 "$here/airdrop/sender.py" \
+    --iface "${AIRDROP_IFACE:-awdl0}" "$@"

@@ -1,0 +1,6 @@
+#!/bin/sh
+# AirDrop receiver. Needs awdl0, created by OWL (bin/owl).
+here=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+exec python3 "$here/airdrop/receiver.py" \
+    --iface "${AIRDROP_IFACE:-awdl0}" \
+    --outdir "${AIRDROP_OUTDIR:-$HOME/Downloads}" "$@"
