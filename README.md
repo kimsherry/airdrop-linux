@@ -150,6 +150,11 @@ Bluetooth 비콘과 수신기를 켠 상태에서 아이폰으로 AirDrop 목록
 목록에 뜨지 않았습니다. 소프트웨어가 아니라 Wi-Fi 카드 제약이며, active monitor가
 되는 동글을 꽂으면 이 경로가 그대로 이어집니다.
 
+2026-10-29에 IPv4 응답까지 붙여 다시 시도했습니다. 아이폰은 우리 인스턴스를
+known-answer로 캐시했지만 목록에는 뜨지 않았고, 원인은 아래
+[Wi-Fi에서 온 결과는 목록에 쓰지 않는다](#wi-fi에서-온-결과는-목록에-쓰지-않는다)의
+`validAirDropInterface:` 필터로 확인됐습니다.
+
 ## iOS 27.2 바이너리에서 확인한 것 (2026-10-29)
 
 기기 없이 IPSW만으로 확인했습니다. 대상은 iPhone17,1 (iPhone 16 Pro)
@@ -208,6 +213,25 @@ TXT로 옵니다. 이 저장소는 `_device-info._tcp.`를 광고하지 않습�
 - bool `true` 또는 문자열 `"1"` → `_airdrop-alt._tcp.`
 - 그 외 문자열 → 앞 7글자를 붙여 `_airdrop-<7자>._tcp.`
 - `EnableDemoMode`가 true → `_airdrop-demo._tcp.`
+
+### Wi-Fi에서 온 결과는 목록에 쓰지 않는다
+
+`-[SDBonjourBrowser validAirDropInterface:]`는 DNSServiceBrowse 콜백이
+`addService:type:domain:interface:`를 호출하기 전에 인터페이스를 검사합니다.
+
+- `awdl0` 인터페이스 → 통과
+- `BrowseAllInterfaces` 또는 `EnableDemoMode`가 켜져 있으면 → 모든 인터페이스 통과
+- 그 외 → `wlo1` 같은 일반 Wi-Fi 인터페이스는 버림
+
+두 환경설정은 일반 아이폰 기본값이 꺼져 있습니다. 그래서 iPhone이 같은 Wi-Fi에서
+`_airdrop._tcp.local.`을 질의하고 우리가 IPv4로 응답해도, iPhone의 mDNS 캐시에는
+인스턴스가 known-answer로 남을 뿐 AirDrop 목록에는 추가되지 않습니다.
+2026-10-29 실기기 대조에서 `sherry-linux._airdrop._tcp.local.`과
+`0123456789ab._airdrop._tcp.local.`이 아이폰의 known-answer에 실제로 나타나는 것을
+확인했지만, 목록에는 끝까지 뜨지 않았습니다.
+
+따라서 이 저장소가 `wlo1`에서 조용히 수신기를 띄워도 Apple 발신자는 그 결과를
+쓰지 않습니다. `awdl0`이 없는 환경에서는 발견 단계부터 성립하지 않습니다.
 
 ### 최신 수신 데이터 모델 (Sharing.framework)
 

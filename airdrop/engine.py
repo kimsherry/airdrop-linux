@@ -649,6 +649,9 @@ def main(argv=None):
         stream.reconfigure(encoding='utf-8')
     logging.basicConfig(level=logging.DEBUG if args.trace else logging.INFO,
                         stream=sys.stderr, format='%(asctime)s %(levelname)s %(message)s')
+    if not args.loopback and args.iface != 'awdl0':
+        logging.warning('%s is not awdl0: Apple senders discard AirDrop results '
+                        'from other interfaces', args.iface)
     events = Events(sys.stdout)
     try:
         engine = Engine(args, events)

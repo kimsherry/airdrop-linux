@@ -492,6 +492,9 @@ def main(argv=None):
     logging.basicConfig(level=logging.DEBUG if settings.trace else logging.INFO,
                         stream=sys.stdout,
                         format='%(asctime)s %(levelname)s %(message)s')
+    if settings.iface != 'awdl0':
+        logging.warning('%s is not awdl0: Apple senders discard AirDrop results '
+                        'from other interfaces', settings.iface)
     try:
         context = tls_context(settings.keys)
     except identity.IdentityError as error:
