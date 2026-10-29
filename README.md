@@ -17,8 +17,9 @@ IOS·macOS 기기와 리눅스 사이에서 AirDrop을 주고받기 위한 프�
 | 항목 | 상태 |
 |---|---|
 | 프로토콜 계층 (발견·TLS·수락·전송·저장) | ✅ 리눅스에서 종단간 검증 |
-| 유닛 테스트 94개 + 종단간 스크립트 | ✅ 전부 통과 |
+| 유닛 테스트 92개 + 종단간 스크립트 | ✅ 전부 통과 (1개는 플랫폼 조건으로 skip) |
 | 실제 Wi-Fi 인터페이스에서 mDNS 발견·전송 | ✅ 검증 |
+| 실제 아이폰의 mDNS 질의에 응답 | ✅ 관측 — 다만 AWDL이 아니라 아이폰이 접속하지 않음 (아래 [실제 아이폰 시도](#실제-아이폰-시도-2026-10-27)) |
 | `awdl0` 위에서 실제 아이폰과 통신 | ⚠️ 미검증 (테스트한 PC의 내장 Wi-Fi가 active monitor 미지원) |
 | Bluetooth 비콘 (BlueZ LE 광고) | ✅ 구현·등록 검증 (`ActiveInstances` 1→0). 아이폰이 실제로 반응하는지는 미검증 |
 | contacts-only 모드 | ❌ 원리적으로 불가 (아래 [설명](#contacts-only는-왜-안-되나)) |
@@ -128,12 +129,26 @@ AirDrop의 contacts-only는 "내 연락처에 있는 사람에게만 보이기"�
 
 ```bash
 cd airdrop
-PYTHONPATH=. python3 tests/test_*.py        # 98개
+PYTHONPATH=. python3 tests/test_*.py        # 92개
 PYTHONPATH=. python3 tests/e2e_loopback.py  # 루프백 종단간 (라디오 불필요)
 ```
 
 종단간 스크립트는 엔진 두 개를 루프백으로 띄워 TLS 핸드셰이크 → `/Discover` →
 `/Ask` → `/Upload`(dvzip) → 디코드 → 저장까지 확인하고 SHA-256을 비교합니다.
+
+### 실제 아이폰 시도 (2026-10-27)
+
+Bluetooth 비콘과 수신기를 켠 상태에서 아이폰으로 AirDrop 목록을 열어 확인했습니다.
+
+- 아이폰이 같은 Wi-Fi(`wlo1`)에서 `_airdrop._tcp.local.`을 약 40초간 6회 질의
+- 수신기는 매번 `flags=0x3fb`로 응답 (SRV/TXT/AAAA 포함)
+- 아이폰은 TLS 연결을 시도하지 않음 (`/Discover` 0회)
+- 원인: 아이폰은 AirDrop 상대를 AWDL 위에서만 찾는데, 시험한 PC의 Intel CNVi
+  카드는 active monitor/프레임 주입이 안 되어 `awdl0`을 만들 수 없음
+
+즉 프로토콜 계층은 아이폰의 질의에 정상 응답했지만, 링크 계층(AWDL)이 없어
+목록에 뜨지 않았습니다. 소프트웨어가 아니라 Wi-Fi 카드 제약이며, active monitor가
+되는 동글을 꽂으면 이 경로가 그대로 이어집니다.
 
 ## 알려진 한계
 
