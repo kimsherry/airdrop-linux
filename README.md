@@ -150,6 +150,84 @@ Bluetooth 비콘과 수신기를 켠 상태에서 아이폰으로 AirDrop 목록
 목록에 뜨지 않았습니다. 소프트웨어가 아니라 Wi-Fi 카드 제약이며, active monitor가
 되는 동글을 꽂으면 이 경로가 그대로 이어집니다.
 
+## iOS 27.2 바이너리에서 확인한 것 (2026-10-29)
+
+기기 없이 IPSW만으로 확인했습니다. 대상은 iPhone17,1 (iPhone 16 Pro)
+iOS 27.2 (24B119)의 `/usr/lib/epsex/sharingd`(AirDrop 데몬)와
+`Sharing.framework`이며, dyld shared cache를 추출해 정적 분석했습니다.
+
+### TXT 레코드는 `flags` 하나뿐 (Everyone이면 `atag` 추가)
+
+`-[SDAirDropPublisher updateTXTRecordAndNotify]`(`0x10006a274`)가
+`NSNetService dataFromTXTRecordDictionary:` → `CFNetServiceSetTXTData`로 TXT를
+만듭니다. 사전에 넣는 키는 두 개뿐입니다.
+
+| 키 | 값 | 조건 |
+|---|---|---|
+| `flags` | `stringWithFormat:@"%ld"` → **10진수** | 항상 |
+| `atag` | `[SDNearbyAgent bleAuthTag]`의 base64 | 발견 모드가 **Everyone**일 때만, 아니면 키 제거 |
+
+`adVN` `adVF` `adDT` `cname` `phash` `ehash` `nhash` `comment` `ecolor` `icolor`
+`osxvers` `model` 문자열은 바이너리에 있지만 **이 TXT 사전에는 들어가지 않습니다.**
+이 저장소가 `flags`만 광고하는 것과 일치합니다. 다만 Everyone 모드의 `atag`는
+이 구현이 보내지 않습니다(Apple 서명 신원이 없어 채울 값이 없음).
+
+### `flags` 계산
+
+```
+base = 0x367
+Wallet 앱이 있고 Apple ID가 개인(비관리)이면 base = 0x377
+Gestalt "RenderWideGamutImagesAtDisplayTime" → base |= 0x80
+Gestalt "R1Capability"                      → base |= 0x400
+```
+
+- iPhone 16 Pro(개인 Apple ID, wide gamut, R1 없음) → **`0x3f7` = 1015**
+- 이 저장소는 macOS 실측값 `0x3fb`(1019)를 씁니다. 두 값은 `0x04`와 `0x08`
+  비트가 서로 다릅니다. 받는 쪽이 Mac으로 보이는 게 목적이라 macOS 값을 유지합니다.
+- 값을 10진수 문자열로 쓴다는 점은 구현과 같습니다.
+
+### 발견할 때 읽는 TXT는 서비스마다 다르다
+
+`-[SDBonjourBrowser processTXTRecordUpdate:rdlen:rdata:]`(`0x1001493a0`):
+
+| Bonjour 서비스 | 읽는 TXT 키 | 콜백 |
+|---|---|---|
+| `_airdrop._tcp.` | `flags` `atag` `cname` `phash` `ehash` `nhash` | `personInfoChanged:...` |
+| `_device-info._tcp.` | `model` `ecolor` `icolor` `osxvers` | `deviceInfoChanged:...` |
+| `_netbios._udp.` | `comment` (`sys`) | `commentChanged:` |
+
+즉 상대의 모델명·기기 색은 `_airdrop._tcp.` TXT가 아니라 `_device-info._tcp.`
+TXT로 옵니다. 이 저장소는 `_device-info._tcp.`를 광고하지 않습니다(모델명은
+`/Discover` 응답의 `ReceiverModelName`으로 전달).
+
+### `_airdrop-alt._tcp.`는 고정 대안이 아니라 환경설정 스위치
+
+`sub_1000f1628`:
+
+- `AlternateService` 환경설정 없음 → `_airdrop._tcp.`
+- bool `true` 또는 문자열 `"1"` → `_airdrop-alt._tcp.`
+- 그 외 문자열 → 앞 7글자를 붙여 `_airdrop-<7자>._tcp.`
+- `EnableDemoMode`가 true → `_airdrop-demo._tcp.`
+
+### 최신 수신 데이터 모델 (Sharing.framework)
+
+`Sharing.SFAirDropReceive.AskRequest`는 Codable 구조체이고 키는 다음과 같습니다.
+
+`id` `type` `transferTypes` `canAutoAccept` `verifiableIdentity` `senderIsMe`
+`contactIdentifier` `senderBundleID` `senderComputerName` `senderModelName`
+`senderEmail` `senderEmailHash` `senderCompositeName` `senderFirstName`
+`senderLastName` `senderID` `senderIcon` `smallPreviewImage` `previewImage`
+`itemsDescription` `itemsDescriptionAdvanced` `urlItems` `items` `customPayload`
+`pairingPin` `senderIdentityAuthTag`
+
+`AskResponse`는 plist 딕셔너리가 아니라 enum입니다:
+`accept(destination, acceptContext{shouldExtractMedia, customPayload})` /
+`decline` / `error` / `mixedTypes`.
+
+이 구현의 `/Ask`는 예전 키(`Files` `Items` `TransferType` `SenderComputerName`)를
+읽습니다. 최신 iOS가 위 키로 보내면 파일 목록 로그와 링크(URL) 판별이 비게 됩니다.
+실제 와이어 인코딩(plist/JSON)과 하위 호환 여부는 아이폰 실물로 확인해야 합니다.
+
 ## 알려진 한계
 
 - OWL이 Wi-Fi 카드를 독점합니다 → AirDrop 사용 중 일반 Wi-Fi 인터넷 불가
